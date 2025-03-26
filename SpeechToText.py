@@ -3,7 +3,7 @@ import pyttsx3
 import time
 import threading
 from datetime import datetime
-from openai import OpenAI
+import openai
 
 r = sr.Recognizer()
 engine = pyttsx3.init()
@@ -11,15 +11,15 @@ currentText = []
 silenceTimer = None
 fileCounter = 1
 
-openAIClient = OpenAI(api_key="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")
+openai.api_key = "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"
 
 def speak(text):
     engine.say(text)
     engine.runAndWait()
 
 def saveText(textContent):
-    global file_counter
-    filename = f"conversation_{file_counter}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    global fileCounter
+    filename = f"conversation_{fileCounter}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     with open(filename, 'w') as f:
         f.write(textContent)
     print(f"Saved conversation to {filename}")
@@ -43,7 +43,7 @@ def resetSilenceTimer():
     global silenceTimer
     if silenceTimer is not None:
         silenceTimer.cancel()
-    silencetimer = threading.Timer(2.0, handleSilence)
+    silenceTimer = threading.Timer(2.0, handleSilence)
     silenceTimer.start()
 
 def handleSilence():
