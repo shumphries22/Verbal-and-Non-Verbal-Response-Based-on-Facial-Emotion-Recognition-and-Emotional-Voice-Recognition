@@ -8,57 +8,81 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import classification_report, confusion_matrix
 
 #function to extract features from audio file
-def extract_feature(fileName, mfcc=True, chroma=True, mel=True):
-    with soundfile.SoundFile(fileName) as soundFile:
-        X = soundFile.read(dtype="float32")
-        sample_rate = soundFile.samplerate
-        
-        if chroma:
-            stft = np.abs(librosa.stft(X))
-        result = np.array([])
-        
-        if mfcc:
-            mfccs = np.mean(librosa.feature.mfcc(y=X, sr=sample_rate, n_mfcc=40).T, axis=0)
-            result = np.hstack((result, mfccs))
-        if chroma:
-            chroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sample_rate).T, axis=0)
-            result = np.hstack((result, chroma))
-        if mel:
-            mel = np.mean(librosa.feature.melspectrogram(y=X, sr=sample_rate).T, axis=0)
-            result = np.hstack((result, mel))
-    return result
+def extractFeature(fileName, mfcc=True, chroma=True, mel=True, min_length=2048):
+    try:
+        with soundfile.SoundFile(fileName) as soundFile:
+            X = soundFile.read(dtype="float32")
+            sampleRate = soundFile.samplerate
+            
+            if len(X) < min_length:
+                print(f"File too short ({len(X)} samples < {min_length}): {fileName}")
+                return None
+                
+            features = []
+            
+            if mfcc:
+                mfccs = np.mean(librosa.feature.mfcc(y=X, sr=sampleRate, n_mfcc=40).T, axis=0)
+                features.append(mfccs)
+                
+            if chroma:
+                stft = np.abs(librosa.stft(X, n_fft=min(2048, len(X))))
+                chroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sampleRate).T, axis=0)
+                features.append(chroma)
+                
+            if mel:
+                mel = np.mean(librosa.feature.melspectrogram(y=X, sr=sampleRate).T, axis=0)
+                features.append(mel)
+                
+            if features:
+                return np.concatenate(features)
+            return None
+            
+    except Exception as e:
+        print(f"Error processing {fileName}: {str(e)}")
+        return None
 
 emotionList = {
     '01': 'neutral',
     '02': 'calm',
     '03': 'happy',
-    '04': 'fearful',
-    '05': 'disgust',
-    '06': 'sad',
-    '07': 'surprised'
-    }
+    '04': 'sad',       
+    '05': 'angry',      
+    '06': 'fearful',    
+    '07': 'disgust',    
+    '08': 'surprised'   
+}
 
 observedEmotions = ['neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised']
 
-def loadData(dataset_path, test_size=0.2):
+def loadData(datasetPath, testSize=0.2):
     x, y = [], []
-    for file in glob.glob(os.path.join(dataset_path, "Actor_*/*.wav")):
-        file_name = os.path.basename(file)
-        emotion_code = file_name.split("-")[2]
-        emotion = emotions[emotion_code]
-        
-        if emotion not in observedEmotions:
-            continue
-            
+    skippedFiles = 0
+    
+    for file in glob.glob(os.path.join(datasetPath, "Actor_*/*.wav")):
         try:
-            feature = extract_feature(file, mfcc=True, chroma=True, mel=True)
-            x.append(feature)
-            y.append(emotion)
-        except Exception as e:
-            print(f"Error processing {file}: {str(e)}")
-            continue
+            fileName = os.path.basename(file)
+            parts = fileName.split("-")
+            if len(parts) < 3:
+                continue
+                
+            emotion_code = parts[2]
+            emotion = emotionList.get(emotion_code)
             
-    return train_test_split(np.array(x), y, test_size=test_size, random_state=101)
+            if emotion not in observedEmotions:
+                continue
+                
+            feature = extractFeature(file)
+            if feature is not None:
+                x.append(feature)
+                y.append(emotion)
+            else:
+                skippedFiles += 1
+        except Exception as e:
+            print(f"Skipping {file} due to error: {str(e)}")
+            skippedFiles += 1
+            
+    print(f"Skipped {skippedFiles} files due to errors or short length")
+    return train_test_split(np.array(x), y, testSize=testSize, random_state=101)
 
 def trainModel(X_train, y_train):
     model = MLPClassifier(
@@ -93,10 +117,13 @@ def loadSavedModel(filename):
     return model
 
 #function to predict emotion from audio file
-def predictEmotion(model, audio_path):
-    """Predict emotion from a new audio file"""
+def predictEmotion(model, audioPath):
     try:
-        features = extract_feature(audio_path)
+        features = extractFeature(audioPath)
+        if features is None:
+            print("Feature extraction failed - file may be too short or corrupted")
+            return None
+            
         features = features.reshape(1, -1)
         prediction = model.predict(features)[0]
         probabilities = model.predict_proba(features)[0]
@@ -109,38 +136,43 @@ def predictEmotion(model, audio_path):
             
         return prediction
     except Exception as e:
-        print(f"Error predicting emotion: {str(e)}")
+        print(f"Prediction error: {str(e)}")
         return None
 
 if __name__ == "__main__":
-    #configuration
-    datasetPath = "/path/to/RAVDESS/Dataset"  # Update this path
+    datasetPath = "C:/Users/rjthornberry/Documents/RAVDESS" 
     modelPath = "emotion_recognition_model.pkl"
     
-    #load and prepare data
-    print("Loading dataset and extracting features...")
-    X_train, X_test, y_train, y_test = loadData(datasetPath, test_size=0.25)
+    if not os.path.exists(datasetPath):
+        print(f"Dataset path not found: {datasetPath}")
+        exit(1)
     
+    print("Loading dataset and extracting features...")
+    X_train, X_test, y_train, y_test = loadData(datasetPath, testSize=0.25)
+    
+    if len(X_train) == 0 or len(X_test) == 0:
+        print("Error: No valid training data found")
+        exit(1)
+    
+    print(f"\nData Summary:")
     print(f"Training samples: {X_train.shape[0]}")
     print(f"Testing samples: {X_test.shape[0]}")
     print(f"Features extracted: {X_train.shape[1]}")
     
-    #train model
     print("\nTraining model...")
     model = trainModel(X_train, y_train)
     
-    #evaluate model
     print("\nEvaluating model performance...")
     evaluateModel(model, X_test, y_test)
     
-    #save model
     saveModel(model, modelPath)
     
-    #example prediction
-    TEST_AUDIO = "path/to/your/test_audio.wav"  # Replace with your test file
-    if os.path.exists(TEST_AUDIO):
-        print(f"\nPredicting emotion for {TEST_AUDIO}...")
+    testAudio = "C:/Users/rjthornberry/Downloads/harvard.wav"
+    if os.path.exists(testAudio):
+        print(f"\nPredicting emotion for {testAudio}...")
         loaded_model = loadSavedModel(modelPath)
-        predictEmotion(loaded_model, TEST_AUDIO)
+        result = predictEmotion(loaded_model, testAudio)
+        if result is None:
+            print("Could not predict emotion - check audio file format and length")
     else:
-        print("\nNo test audio file found for prediction demonstration.")
+        print("\nTest audio file not found - prediction skipped")
