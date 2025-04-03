@@ -54,11 +54,11 @@ emotionList = {
 
 observedEmotions = ['neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust', 'surprised']
 
-def loadData(datasetPath, testSize=0.2):
+def loadData(dataset_path, test_size=0.2):
     x, y = [], []
     skippedFiles = 0
     
-    for file in glob.glob(os.path.join(datasetPath, "Actor_*/*.wav")):
+    for file in glob.glob(os.path.join(dataset_path, "Actor_*/*.wav")):
         try:
             fileName = os.path.basename(file)
             parts = fileName.split("-")
@@ -82,7 +82,7 @@ def loadData(datasetPath, testSize=0.2):
             skippedFiles += 1
             
     print(f"Skipped {skippedFiles} files due to errors or short length")
-    return train_test_split(np.array(x), y, testSize=testSize, random_state=101)
+    return train_test_split(np.array(x), np.array(y), test_size=test_size, random_state=101)
 
 def trainModel(X_train, y_train):
     model = MLPClassifier(
@@ -140,7 +140,7 @@ def predictEmotion(model, audioPath):
         return None
 
 if __name__ == "__main__":
-    datasetPath = "C:/Users/rjthornberry/Documents/RAVDESS" 
+    datasetPath = "D://Downloads//archive" 
     modelPath = "emotion_recognition_model.pkl"
     
     if not os.path.exists(datasetPath):
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         exit(1)
     
     print("Loading dataset and extracting features...")
-    X_train, X_test, y_train, y_test = loadData(datasetPath, testSize=0.25)
+    X_train, X_test, y_train, y_test = loadData(datasetPath, test_size=0.25)
     
     if len(X_train) == 0 or len(X_test) == 0:
         print("Error: No valid training data found")
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     
     saveModel(model, modelPath)
     
-    testAudio = "C:/Users/rjthornberry/Downloads/harvard.wav"
+    testAudio = "D://Downloads//test.wav"
     if os.path.exists(testAudio):
         print(f"\nPredicting emotion for {testAudio}...")
         loaded_model = loadSavedModel(modelPath)
