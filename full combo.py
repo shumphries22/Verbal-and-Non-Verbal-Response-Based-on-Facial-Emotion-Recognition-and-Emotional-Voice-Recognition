@@ -13,6 +13,7 @@ import time
 import speech_recognition as sr
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import model_from_json
+from tensorflow.keras.models import load_model
 
 # GLOBAL VARIABLES
 facial_emotion = "unknown"
@@ -33,12 +34,15 @@ except FileNotFoundError:
     print(f"Warning: Emotion model not found at {emotion_model_path}. Audio emotion analysis disabled.")
     emotion_model = None
 
+"""
 json_path = 'D://uni//HRI//FaceModel//nNModel.json'
 weights_path = 'D://uni//HRI//FaceModel//nNModel.weights.h5'
 with open(json_path, 'r') as json_file:
     model_json = json_file.read()
 model = model_from_json(model_json)
-model.load_weights(weights_path)
+model.load_weights(weights_path) 
+"""
+model = load_model('D://uni//HRI//FaceModel//fer2013_mini_XCEPTION.102-0.66.hdf5', compile=False)
 class_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
 # Initialize text-to-speech engine
@@ -195,7 +199,6 @@ def process_conversation(facial_emotion="unknown"):
     return response, (audio_emotion, facial_emotion)
 
 def process_face_expression(frame):
-    """Detect facial expressions."""
     global facial_emotion
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
@@ -203,12 +206,19 @@ def process_face_expression(frame):
     for (x, y, w, h) in faces:
         cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
         face = gray[y:y+h, x:x+w]
-        face = cv2.resize(face, (48, 48))
+        face = cv2.resize(face, (64, 64))  # <-- Resize to 64x64!
         face = face.astype('float32') / 255.0
-        face = np.expand_dims(face, axis=(0, -1))
+        face = np.expand_dims(face, axis=0)
+        face = np.expand_dims(face, axis=-1)  # Shape: (1, 64, 64, 1)
+
         prediction = model.predict(face)
-        facial_emotion = class_labels[np.argmax(prediction)]
-        cv2.putText(frame, facial_emotion, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        emotion_label = class_labels[np.argmax(prediction)]
+        confidence = np.max(prediction)
+
+        facial_emotion = emotion_label
+        text = f"{emotion_label} ({confidence*100:.1f}%)"
+
+        cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     return frame
 
