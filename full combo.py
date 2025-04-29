@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
-import pyttsx3
+# import pyttsx3
+import socket
 import sounddevice as sd
 import soundfile as sf
 import librosa
@@ -14,6 +15,9 @@ import speech_recognition as sr
 from sklearn.preprocessing import StandardScaler
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
+import sys
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # GLOBAL VARIABLES
 facial_emotion = "unknown"
@@ -25,7 +29,7 @@ current_transcript = ""
 client = OpenAI(api_key = "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")  # <-- replace with your actual key
 
 # Load models
-emotion_model_path = 'D://Downloads//emotion_model.pkl'
+emotion_model_path = 'C://Users//rjthornberry//Documents//HRI//emotion_model.pkl'
 try:
     with open(emotion_model_path, 'rb') as f:
         emotion_model = pickle.load(f)
@@ -42,11 +46,12 @@ with open(json_path, 'r') as json_file:
 model = model_from_json(model_json)
 model.load_weights(weights_path) 
 """
-model = load_model('D://uni//HRI//FaceModel//fer2013_mini_XCEPTION.102-0.66.hdf5', compile=False)
+
+model = load_model('C://Users//rjthornberry//Documents//HRI//fer2013_mini_XCEPTION.102-0.66.hdf5', compile=False)
 class_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
 # Initialize text-to-speech engine
-engine = pyttsx3.init()
+# engine = pyttsx3.init()
 
 # Initialize webcam and face detector
 cap = cv2.VideoCapture(0)
@@ -126,6 +131,15 @@ def get_chatgpt_response(transcript, audio_emotion, facial_emotion):
     except Exception as e:
         print(f"OpenAI API error: {e}")
         return "Sorry, I couldn't process that."
+    
+def speak_via_pepper_socket(response, pepper_ip="169.254.156.17", port=10000):
+    """Send the ChatGPT response to Pepper's TTS socket server."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((pepper_ip, port))
+            s.sendall(response.encode("utf-8"))
+    except Exception as e:
+        print(f"[Socket Error] Could not send to Pepper: {e}")
 
 def record_callback(indata, frames, time_info, status):
     """Capture audio callback."""
@@ -170,8 +184,11 @@ def monitor_silence():
                         response, _ = process_conversation(facial_emotion)
                         if response:
                             print(f"Assistant: {response}")
-                            engine.say(response)
-                            engine.runAndWait()
+                            # engine.say(response)
+                            # engine.runAndWait()
+                            sock.sendall(response.encode('utf-8'))
+
+
         time.sleep(0.1)
 
 def process_conversation(facial_emotion="unknown"):
@@ -225,23 +242,30 @@ def process_face_expression(frame):
 # --- MAIN LOOP ---
 
 def main():
+    server_address = ('169.254.156.17', 10000)  # Replace 'localhost' with your server IP if needed
+    print('Connecting to {} port {}'.format(*server_address), file=sys.stderr)
+    sock.connect(server_address)
+    
     threading.Thread(target=monitor_silence, daemon=True).start()
     print("Interactive system ready.")
     print("Press Enter to start speaking...")
-
-    while True:
-        input("Press Enter to start recording...")
-        if not is_recording:
-            start_recording()
-            with sd.InputStream(callback=record_callback, channels=1, samplerate=SAMPLE_RATE):
-                while is_recording:
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    frame = process_face_expression(frame)
-                    cv2.imshow('Facial Expression Recognition', frame)
-                    if cv2.waitKey(1) & 0xFF == ord('q'):
-                        break
+    try:
+        while True:
+            input("Press Enter to start recording...")
+            if not is_recording:
+                start_recording()
+                with sd.InputStream(callback=record_callback, channels=1, samplerate=SAMPLE_RATE):
+                    while is_recording:
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+                        frame = process_face_expression(frame)
+                        cv2.imshow('Facial Expression Recognition', frame)
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            break
+    finally:
+        print('Closing socket', file=sys.stderr)
+        sock.close()
 
     cap.release()
     cv2.destroyAllWindows()
