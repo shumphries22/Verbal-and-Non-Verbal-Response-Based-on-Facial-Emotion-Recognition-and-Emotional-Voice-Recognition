@@ -59,7 +59,7 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 
 # Audio parameters
 SAMPLE_RATE = 16000
-SILENCE_DURATION = 2
+SILENCE_DURATION = 5
 ENERGY_THRESHOLD = 500
 MIN_RECORDING_LENGTH = 1
 
