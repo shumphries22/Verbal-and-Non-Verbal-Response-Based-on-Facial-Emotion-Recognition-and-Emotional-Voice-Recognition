@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-# import pyttsx3
 import socket
 import sounddevice as sd
 import soundfile as sf
@@ -19,16 +18,13 @@ import sys
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# GLOBAL VARIABLES
 facial_emotion = "unknown"
 is_recording = False
 audio_frames = []
 current_transcript = ""
 
-# Initialize OpenAI API
-client = OpenAI(api_key = "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")  # <-- replace with your actual key
+client = OpenAI(api_key = "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")
 
-# Load models
 emotion_model_path = 'C://Users//rjthornberry//Documents//HRI//emotion_model.pkl'
 try:
     with open(emotion_model_path, 'rb') as f:
@@ -38,35 +34,18 @@ except FileNotFoundError:
     print(f"Warning: Emotion model not found at {emotion_model_path}. Audio emotion analysis disabled.")
     emotion_model = None
 
-"""
-json_path = 'D://uni//HRI//FaceModel//nNModel.json'
-weights_path = 'D://uni//HRI//FaceModel//nNModel.weights.h5'
-with open(json_path, 'r') as json_file:
-    model_json = json_file.read()
-model = model_from_json(model_json)
-model.load_weights(weights_path) 
-"""
-
 model = load_model('C://Users//rjthornberry//Documents//HRI//fer2013_mini_XCEPTION.102-0.66.hdf5', compile=False)
 class_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Sad', 'Surprise', 'Neutral']
 
-# Initialize text-to-speech engine
-# engine = pyttsx3.init()
-
-# Initialize webcam and face detector
 cap = cv2.VideoCapture(0)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Audio parameters
 SAMPLE_RATE = 16000
 SILENCE_DURATION = 5
 ENERGY_THRESHOLD = 500
 MIN_RECORDING_LENGTH = 1
 
-# --- AUDIO FUNCTIONS ---
-
 def extract_features(audio_data, sample_rate):
-    """Extract audio features."""
     features = []
     mfccs = librosa.feature.mfcc(y=audio_data, sr=sample_rate, n_mfcc=40)
     chroma = librosa.feature.chroma_stft(y=audio_data, sr=sample_rate)
@@ -83,7 +62,6 @@ def extract_features(audio_data, sample_rate):
     return np.array(features)
 
 def analyze_emotion(audio_file):
-    """Analyze emotion from audio."""
     if emotion_model is None:
         return "unknown"
     try:
@@ -97,7 +75,6 @@ def analyze_emotion(audio_file):
         return "unknown"
 
 def transcribe_audio(audio_file):
-    """Transcribe audio to text."""
     r = sr.Recognizer()
     with sr.AudioFile(audio_file) as source:
         audio = r.record(source)
@@ -111,7 +88,6 @@ def transcribe_audio(audio_file):
         return ""
 
 def get_chatgpt_response(transcript, audio_emotion, facial_emotion):
-    """Get response from ChatGPT."""
     prompt = f"The user said: '{transcript}'. "
     if audio_emotion != "unknown":
         prompt += f"They seem to feel {audio_emotion} based on tone. "
@@ -133,7 +109,6 @@ def get_chatgpt_response(transcript, audio_emotion, facial_emotion):
         return "Sorry, I couldn't process that."
     
 def speak_via_pepper_socket(response, pepper_ip="169.254.156.17", port=10000):
-    """Send the ChatGPT response to Pepper's TTS socket server."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((pepper_ip, port))
@@ -142,27 +117,21 @@ def speak_via_pepper_socket(response, pepper_ip="169.254.156.17", port=10000):
         print(f"[Socket Error] Could not send to Pepper: {e}")
 
 def record_callback(indata, frames, time_info, status):
-    """Capture audio callback."""
     global is_recording, audio_frames
     if is_recording:
         audio_frames.append(indata.copy())
 
 def save_audio(frames, sample_rate, filename):
-    """Save recorded audio."""
     audio_data = np.concatenate(frames, axis=0)
     sf.write(filename, audio_data, sample_rate)
 
 def start_recording():
-    """Start recording."""
     global is_recording, audio_frames
     is_recording = True
     audio_frames = []
     print("Recording started... Speak now!")
 
-# --- MONITORING FUNCTIONS ---
-
 def monitor_silence():
-    """Monitor silence to stop recording."""
     global is_recording, facial_emotion
     while True:
         if is_recording and audio_frames:
@@ -192,7 +161,6 @@ def monitor_silence():
         time.sleep(0.1)
 
 def process_conversation(facial_emotion="unknown"):
-    """Handle processing after recording."""
     global audio_frames, current_transcript
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -238,8 +206,6 @@ def process_face_expression(frame):
         cv2.putText(frame, text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
     return frame
-
-# --- MAIN LOOP ---
 
 def main():
     server_address = ('169.254.156.17', 10000)  # Replace 'localhost' with your server IP if needed
